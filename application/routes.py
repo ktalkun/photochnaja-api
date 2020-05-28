@@ -182,3 +182,31 @@ def crop_photo(current_user):
     queue_client.send_message(base64_encoder.encode(json.dumps(message)),
                               visibility_timeout=0)
     return jsonify({'uuid': data.get('name')})
+
+
+@app.route('/crop', methods=['GET'])
+@cross_origin()
+@token_required
+def get_crop_staus(current_user):
+    queue_service_client = QueueServiceClient.from_connection_string(
+        STORAGE_CONNECTION_STRING)
+
+    queue_name = current_user.login
+    queue_client = queue_service_client.get_queue_client(queue_name)
+    if not any(queue.name == queue_name for queue in
+               queue_service_client.list_queues()):
+        queue_client.create_queue()
+
+    blob_name = request.args.get('uuid')
+    messages = queue_client.receive_messages()
+
+    result_message = None
+    for message in messages:
+        if json.loads(message.content).get('blob_name') == blob_name:
+            queue_client.delete_message(message)
+            return jsonify({
+                'uuid': blob_name,
+                'is_cropped': True
+            })
+
+    return jsonify({'is_cropped': False})
